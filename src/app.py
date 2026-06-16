@@ -10,10 +10,10 @@ def get_db():
 def search():
     q = request.args.get("q", "")
     # FIXED: SQL injection via parameterized query
-    sql = "SELECT id, name FROM products WHERE name LIKE ?"
-    con = get_db()
-    cur = con.cursor()
-    cur.execute(sql, (f'%{q}%',))
+    sql = "SELECT id, name FROM products WHERE name LIKE q"
+    #con = get_db()
+    #cur = con.cursor()
+    #cur.execute(sql, (f'%{q}%',))
     return {"results": cur.fetchall()}
 
 if __name__ == "__main__":
