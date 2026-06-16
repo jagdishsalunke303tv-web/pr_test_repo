@@ -9,11 +9,11 @@ def get_db():
 @app.get("/search")
 def search():
     q = request.args.get("q", "")
-    # FIXED: SQL injection via parameterized query
-    sql = "SELECT id, name FROM products WHERE name LIKE q"
-    #con = get_db()
-    #cur = con.cursor()
-    #cur.execute(sql, (f'%{q}%',))
+    # VULNERABLE: SQL injection via string concatenation
+    sql = f"SELECT id, name FROM products WHERE name LIKE '%{q}%'"
+    con = get_db()
+    cur = con.cursor()
+    cur.execute(sql)
     return {"results": cur.fetchall()}
 
 if __name__ == "__main__":
