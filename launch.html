@@ -1,0 +1,1800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Launch Scan — Argus X</title>
+  <link rel="stylesheet" href="/static/css/tailwind.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link rel="stylesheet" href="/static/css/app.css"/>
+  <style>
+    .kv-row { display:flex; gap:12px; padding:8px 0; border-bottom:1px solid var(--border-muted); font-size:13px; align-items:baseline; }
+    .kv-row:last-child { border-bottom:none; }
+    .kv-key { width:200px; flex-shrink:0; color:var(--text-muted); font-weight:500; }
+    .kv-val { color:var(--text-secondary); word-break:break-word; flex:1; }
+
+    /* ── Section / callout / choice blocks (shared by all three panels) ─── */
+    .section-card { border:1px solid var(--border-muted); border-radius:8px; padding:14px 16px; margin-bottom:14px; background:var(--card-bg-alt); }
+    .section-card .section-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px; }
+    .section-card .section-title { font-size:12.5px; font-weight:600; color:var(--text-primary); }
+    .section-card .section-desc  { font-size:11.5px; color:var(--text-muted); margin-top:3px; line-height:1.45; }
+    .section-card.is-accent { border-color:rgba(20,184,166,.6); background:rgba(20,184,166,.06); }
+    .section-card.is-accent .section-title { color:#2dd4bf; }
+
+    .callout { border-radius:6px; padding:9px 12px; font-size:12px; line-height:1.5; border:1px solid var(--border-muted); background:var(--card-bg-alt); color:var(--text-secondary); }
+    .callout-accent { border-color:rgba(45,212,191,.3); background:rgba(45,212,191,.08); color:#5eead4; }
+    .callout-warn   { border-color:rgba(245,158,11,.35); background:rgba(245,158,11,.08); color:#fbbf24; }
+    .callout-info   { border-color:var(--border-muted); background:rgba(15,23,42,.6); color:var(--text-secondary); }
+
+    .choice-row { display:flex; flex-wrap:wrap; align-items:center; gap:18px; }
+    .choice { display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:var(--text-primary); }
+    .choice input[type=radio], .choice input[type=checkbox] { accent-color:var(--accent); cursor:pointer; }
+    .field-label-sm { font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; margin-bottom:8px; }
+
+    .choice-card { display:flex; align-items:flex-start; gap:10px; cursor:pointer; padding:9px 12px; border-radius:6px; border:1px solid var(--border); background:var(--card-bg-alt); transition:border-color .15s, background .15s; }
+    .choice-card:hover { border-color:var(--accent); }
+    .choice-card.is-selected { border-color:var(--accent); background:rgba(20,184,166,.08); }
+    .choice-card.is-selected-warn { border-color:#f59e0b; background:rgba(245,158,11,.08); }
+
+    /* DevSecOps panel chips & cards */
+    .cat-chip{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;margin-left:4px}
+    .cat-sast   {background:rgba(96,165,250,.15);color:#60a5fa}
+    .cat-sca    {background:rgba(245,158,11,.15);color:#fbbf24}
+    .cat-secrets{background:rgba(239,68,68,.15);color:#ef4444}
+    .cat-iac    {background:rgba(168,85,247,.15);color:#c084fc}
+    .cat-dast   {background:rgba(20,184,166,.15);color:#2dd4bf}
+    .tool-check{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:6px;border:1px solid var(--border-muted);font-size:12px;cursor:pointer;transition:all .15s}
+    .tool-check:has(input:checked){border-color:rgba(45,212,191,.5);background:rgba(45,212,191,.06)}
+    .phase-card{border:1px solid var(--border-muted);border-radius:8px;padding:12px 14px;cursor:pointer;transition:all .15s}
+    .phase-card.selected{border-color:var(--accent);background:rgba(20,184,166,.06)}
+    .review-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-muted);font-size:12.5px}
+    .review-row:last-child{border-bottom:none}
+    .review-key{color:var(--text-muted)}
+    .review-val{font-weight:500;color:var(--text-primary);text-align:right;max-width:65%}
+    .progress-step{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;font-size:12px;margin-bottom:4px}
+    .progress-step.pending{background:rgba(71,85,105,.1);border:1px solid rgba(71,85,105,.3);color:#64748b}
+
+    /* Cov chips (DAST scan-type) */
+    .cov-chip { padding:1px 6px; border-radius:4px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; line-height:1.4; }
+  </style>
+  <script src="/static/js/api.js?v=20260530e"></script>
+  <script src="/static/js/nav.js"></script>
+  <script src="/static/js/ai-rail.js"></script>
+  <script src="/static/js/dast-options.js"></script>
+  <script src="/static/js/dast-wizard.js"></script>
+</head>
+<body>
+<div id="app-shell">
+  <aside id="sidebar"></aside>
+  <div id="main-content" x-data="launcher()" x-init="init()">
+
+    <div id="topbar">
+      <div class="topbar-title">Launch Scan</div>
+      <div class="topbar-actions">
+        <a href="/scans" class="btn btn-ghost btn-sm">← Scans</a>
+      </div>
+    </div>
+
+    <div id="page-body">
+
+      <!-- ── Mode selector ─────────────────────────────────────────────── -->
+      <div class="grid grid-cols-3 gap-3 mb-6">
+        <div class="phase-card" :class="kind==='dast'?'selected':''" @click="kind='dast'">
+          <div class="text-sm font-semibold text-teal-400">DAST</div>
+          <div class="text-xs text-slate-500 mt-1">Web / API application scan — Playwright + Burp Pro / ZAP</div>
+        </div>
+        <div class="phase-card" :class="kind==='devsecops'?'selected':''" @click="kind='devsecops'">
+          <div class="text-sm font-semibold text-blue-400">DevSecOps</div>
+          <div class="text-xs text-slate-500 mt-1">Source-code scan — SAST · SCA · Secrets · IaC, with CI gate phases</div>
+        </div>
+        <div class="phase-card" :class="kind==='schedule'?'selected':''" @click="kind='schedule'">
+          <div class="text-sm font-semibold text-amber-400">Schedule</div>
+          <div class="text-xs text-slate-500 mt-1">Set up a recurring scan on a fixed cadence</div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════ DAST PANEL ══════════════════════════════ -->
+      <div x-show="kind==='dast'" x-data="dastWizard()" x-init="init()">
+        <div class="wizard-steps mb-4">
+          <template x-for="(s,i) in wizardSteps" :key="i">
+            <div class="wizard-step" :class="{'active':step===i+1,'done':step>i+1}" @click="jumpTo(i+1)" style="cursor:pointer">
+              <div class="step-num" x-text="i+1"></div>
+              <div class="step-label" x-text="s"></div>
+            </div>
+          </template>
+        </div>
+
+        <!-- ── Step 1: Basic Details ─────────────────────────────────── -->
+        <div x-show="step===1" style="display:grid;gap:14px">
+
+          <div>
+            <h4 class="text-base font-semibold text-gray-200">Basic Information</h4>
+            <p class="text-xs text-gray-500 mt-1">Provide the basic information for the scan.</p>
+          </div>
+
+          <div class="form-row">
+            <label class="form-label">Name <span class="text-red-400">*</span></label>
+            <input class="form-control" placeholder="e.g. APPID-12345 — May 8, 2026" x-model="form.name" @input="nameAutoGenerated=false"/>
+          </div>
+
+          <div class="form-row">
+            <label class="form-label">Scan Type</label>
+            <div class="choice-row">
+              <label class="choice"><input type="radio" x-model="form.scan_type" value="vulnerability"/><span>Vulnerability <span class="text-gray-500 text-xs">— full audit pipeline</span></span></label>
+              <label class="choice"><input type="radio" x-model="form.scan_type" value="discovery"/><span>Discovery <span class="text-gray-500 text-xs">— auth + crawl only</span></span></label>
+              <label class="choice"><input type="radio" x-model="form.scan_type" value="auth_test"/><span>Auth Test <span class="text-gray-500 text-xs">— validate login only</span></span></label>
+            </div>
+          </div>
+
+          <div class="callout callout-accent">
+            Playwright handles authentication and crawling using the
+            <strong>Authentication record</strong> you pick in <strong>Step 2 — Scan Settings</strong>.
+            ZAP and Burp run audit-only (no spider, no native login).
+            Configure engine options (parallel, headed, OpenAPI, GraphQL, workflows, WebSocket fuzz)
+            in Step 2.
+          </div>
+
+          <div class="form-row">
+            <label class="form-label">Web Scanner</label>
+            <div class="choice-row">
+              <label class="choice"><input type="radio" x-model="form.scanner_tool" value="burp" @change="form.burp_phased=true"/><span>Burp Pro</span></label>
+              <label class="choice"><input type="radio" x-model="form.scanner_tool" value="zap"  @change="form.burp_phased=false"/><span>ZAP</span></label>
+              <label class="choice"><input type="radio" x-model="form.scanner_tool" value="both" @change="form.burp_phased=true"/><span>Both (parallel)</span></label>
+              <template x-if="form.scanner_tool==='burp' || form.scanner_tool==='both'">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                  <button type="button" @click="burpRateModal=true"
+                          style="padding:3px 10px;font-size:11px;border-radius:5px;border:1px solid var(--border);background:var(--card-bg-alt);color:var(--text-secondary);cursor:pointer">
+                    ⚙ Burp Rate Limits
+                    <span x-show="!burpRate.useGlobal" style="color:#34d399;font-weight:700"> — Custom</span>
+                    <span x-show="burpRate.useGlobal" style="color:var(--text-muted)"> — Global</span>
+                  </button>
+                </div>
+              </template>
+            </div>
+            <div class="mt-2">
+              <label class="flex items-center gap-2 text-xs cursor-pointer">
+                <input type="checkbox" x-model="form.bizlogic"/>
+                Business Logic checks
+                <span class="text-gray-400">(race / IDOR / BFLA / workflow — runs after web scan)</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- ── DevSecOps Scanner Selection (nested sub-component) ─────── -->
+          <div class="section-card is-accent" x-data="{
+              devsecops_enabled: false,
+              ds_repos: [],
+              selected_repo_id: '',
+              ds_tools: ['semgrep','snyk','snyk-code','snyk-iac','trufflehog','gitguardian','trivy','sonarqube'],
+              ai_loading: false, ai_rationale: '',
+              catFor(t){return {semgrep:'sast','snyk-code':'sast',sonarqube:'sast',snyk:'sca',trivy:'sca','snyk-iac':'iac',trufflehog:'secrets',gitguardian:'secrets'}[t]||'sast'},
+              catColor(c){return {sast:'#60a5fa',sca:'#fbbf24',secrets:'#ef4444',iac:'#c084fc',dast:'#2dd4bf'}[c]||'#94a3b8'},
+              async loadRepos(){ try { const r = await api.get('/api/devsecops/repos'); this.ds_repos = Array.isArray(r) ? r : (r.data || []); } catch(_) { this.ds_repos = []; } },
+              _f() { return window.__scansData && window.__scansData.form; },
+              applyRepoTemplate() {
+                const r = this.ds_repos.find(x => x.id === this.selected_repo_id);
+                if (!r) return;
+                const f = this._f();
+                if (!f) return;
+                f.devsecops_repo = r.url;
+                f.devsecops_branch = r.default_branch || 'main';
+                f.devsecops_scanners = (r.default_scanners || []).filter(s => this.ds_tools.includes(s));
+              },
+              async aiSuggest(){
+                this.ai_loading=true; this.ai_rationale='';
+                const f = this._f();
+                try {
+                  const r = await api.post('/api/ai/suggest-scanners', {
+                    description: ((f && f.scan_name) || 'unnamed') + ' — ' + ((f && f.target_url) || ''),
+                  });
+                  const d = r.data || r;
+                  if (Array.isArray(d.selected) && f) {
+                    f.devsecops_scanners = d.selected.filter(s => this.ds_tools.includes(s));
+                    if (f.devsecops_scanners.length) this.devsecops_enabled = true;
+                  }
+                  this.ai_rationale = d.rationale || '';
+                } catch (e) { this.ai_rationale='AI unreachable.'; }
+                finally { this.ai_loading=false; }
+              }
+            }"
+            x-init="loadRepos(); $watch('selected_repo_id', id => { if (id && id !== '__manual__') applyRepoTemplate(); })">
+            <div class="section-head">
+              <div>
+                <div class="section-title flex items-center gap-2">
+                  <input type="checkbox" x-model="devsecops_enabled" class="accent-teal-500"
+                         @change="if(!devsecops_enabled && _f()){_f().devsecops_scanners=[]}"/>
+                  DevSecOps scanners (SAST · SCA · Secrets · IaC)
+                </div>
+                <div class="section-desc">
+                  Add source-code analysis to this scan. Requires a Git URL or the target's repo binding.
+                  Findings land in the same unified view alongside DAST results.
+                  Prefer a repo-first flow with CI gate phases? <a href="javascript:void(0)" @click.prevent="window.dispatchEvent(new CustomEvent('set-launch-kind',{detail:'devsecops'}))" class="text-teal-400 hover:underline">Launch a DevSecOps scan →</a>
+                </div>
+              </div>
+              <button type="button" class="text-[11px] text-teal-400 hover:underline"
+                      :disabled="ai_loading" @click="aiSuggest()">
+                <span x-show="!ai_loading">✨ AI: suggest scanners</span>
+                <span x-show="ai_loading">thinking…</span>
+              </button>
+            </div>
+
+            <div x-show="devsecops_enabled" class="space-y-3">
+              <div class="form-row">
+                <label class="form-label">SOURCE REPOSITORY (GIT URL)</label>
+                <select class="form-input w-full" x-model="selected_repo_id">
+                  <option value="">— select a registered repository —</option>
+                  <template x-for="r in ds_repos" :key="r.id">
+                    <option :value="r.id" x-text="r.name + '  ·  ' + r.url"></option>
+                  </template>
+                  <option value="__manual__">✏ Enter URL manually…</option>
+                </select>
+                <template x-if="selected_repo_id === '__manual__'">
+                  <div class="mt-2">
+                    <input class="form-input w-full" placeholder="https://github.com/org/myapp.git"
+                           x-model="form.devsecops_repo"/>
+                  </div>
+                </template>
+                <template x-if="selected_repo_id && selected_repo_id !== '__manual__'">
+                  <div class="mt-1 flex items-center gap-2">
+                    <span class="font-mono text-xs text-teal-300" x-text="form.devsecops_repo"></span>
+                    <span class="text-xs text-slate-500">· branch:</span>
+                    <input class="form-input" style="display:inline-block;width:120px" placeholder="main" x-model="form.devsecops_branch"/>
+                  </div>
+                </template>
+                <template x-if="!selected_repo_id">
+                  <p class="text-[11px] text-gray-500 mt-1">Select a repo to auto-fill URL, branch &amp; default scanners. Or choose <em>Enter URL manually</em>.</p>
+                </template>
+              </div>
+
+              <div class="flex flex-wrap gap-2">
+                <template x-for="tool in ds_tools" :key="tool">
+                  <label class="text-xs flex items-center gap-1.5 cursor-pointer"
+                         :style="'border:1px solid '+catColor(catFor(tool))+'40; padding:4px 10px; border-radius:14px'">
+                    <input type="checkbox" :value="tool" x-model="form.devsecops_scanners" class="accent-teal-500"/>
+                    <span x-text="tool" :style="'color:'+catColor(catFor(tool))+';font-weight:600'"></span>
+                    <span class="text-gray-500" style="font-size:9px" x-text="catFor(tool).toUpperCase()"></span>
+                  </label>
+                </template>
+              </div>
+
+              <div x-show="ai_rationale" class="text-[11px] italic text-slate-400" x-text="ai_rationale"></div>
+
+              <template x-if="selected_repo_id === '__manual__'">
+                <div class="form-row">
+                  <label class="form-label">Default Branch</label>
+                  <input class="form-input" style="width:160px" placeholder="main" x-model="form.devsecops_branch"/>
+                </div>
+              </template>
+
+              <div class="form-row">
+                <label class="form-label">Scan phase <span class="text-xs text-gray-500">(D.6 — drives per-phase gate rules)</span></label>
+                <div class="choice-row">
+                  <label class="choice"><input type="radio" value="pr"         x-model="form.scan_phase"/><span>PR / pre-merge (lenient gate)</span></label>
+                  <label class="choice"><input type="radio" value="staging"    x-model="form.scan_phase"/><span>Staging</span></label>
+                  <label class="choice"><input type="radio" value="production" x-model="form.scan_phase"/><span>Production (strict)</span></label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label class="form-label">Scan Target</label>
+            <div class="choice-row mb-2">
+              <label class="choice"><input type="radio" x-model="form.target_type" value="names"/><span>Names</span></label>
+              <label class="choice"><input type="radio" x-model="form.target_type" value="tags"/><span>Tags</span></label>
+              <label class="choice"><input type="radio" x-model="form.target_type" value="manual"/><span>Manual URL</span></label>
+            </div>
+            <p class="text-xs text-gray-500" x-text="form.target_type==='tags' ? 'Select tags — every web app carrying any of these tags will be queued.' : (form.target_type==='manual' ? 'Enter a target URL directly (no WebApp binding).' : 'Select Name(s) to include the applications you want to scan.')"></p>
+          </div>
+
+          <div class="section-card" x-show="form.target_type==='names'">
+            <div class="section-head">
+              <div class="section-title">Applications</div>
+              <div class="text-xs text-gray-500">
+                <a href="javascript:void(0)" class="text-teal-400 hover:underline" @click="form.web_app_ids = webapps.map(a=>a.id); autoFillScanName()">Select all</a>
+                ·
+                <a href="javascript:void(0)" class="text-teal-400 hover:underline" @click="form.web_app_ids = []">Clear selection</a>
+              </div>
+            </div>
+            <input class="form-control mb-2" placeholder="Filter…" x-model="appFilter"/>
+            <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border-muted);border-radius:6px">
+              <table class="data-table" style="margin:0">
+                <thead><tr><th style="width:30px"></th><th>Name</th><th>URL</th></tr></thead>
+                <tbody>
+                  <template x-for="a in (webapps||[]).filter(x => !appFilter || ((x.name||'')+' '+(x.url||'')).toLowerCase().includes(appFilter.toLowerCase()))" :key="a.id">
+                    <tr>
+                      <td><input type="checkbox" :value="a.id" :checked="form.web_app_ids.includes(a.id)" @change="toggleAppSelect(a.id)"/></td>
+                      <td class="font-medium" x-text="a.name"></td>
+                      <td class="text-xs text-gray-400" x-text="a.url"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+            <div class="text-xs text-gray-500 mt-2" x-text="`${form.web_app_ids.length} application(s) selected`"></div>
+          </div>
+
+          <div class="section-card" x-show="form.target_type==='tags'">
+            <div class="section-title mb-2">Tags</div>
+            <input class="form-control" placeholder="comma-separated tags (e.g. production, internet-facing)" x-model="form.target_tags_input"/>
+          </div>
+
+          <div class="section-card" x-show="form.target_type==='manual'">
+            <div class="form-row">
+              <label class="form-label">Target URL <span class="text-red-400">*</span></label>
+              <input class="form-control" placeholder="https://target.example.com" x-model="form.target"/>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Step 2: Scan Settings ─────────────────────────────────── -->
+        <div x-show="step===2" style="display:grid;gap:14px">
+          <div>
+            <h4 class="text-base font-semibold text-gray-200">Scan Settings</h4>
+            <p class="text-xs text-gray-500 mt-1">Configure the scan settings.</p>
+          </div>
+          <template x-if="inheritedFrom">
+            <div class="callout callout-accent" style="font-size:12px">
+              ⚙ Defaults inherited from Web App <strong x-text="inheritedFrom"></strong>
+              (profile, scanner, scan type, appliance, proxy, DNS, progressive, cancel &amp; auth records).
+              Any field below overrides them for this run only.
+            </div>
+          </template>
+
+          <!-- Authentication Record -->
+          <div class="section-card">
+            <div class="section-head">
+              <div>
+                <div class="section-title">Authentication</div>
+                <div class="section-desc">Use an authentication record to scan the target application, if authentication is required.</div>
+              </div>
+              <a href="/auth-records" class="text-xs text-teal-400 hover:underline">Manage records</a>
+            </div>
+            <div class="rounded border border-gray-700 max-h-56 overflow-y-auto">
+              <label class="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm hover:bg-white/5 border-b border-gray-700/50"
+                     :class="!(form.auth_record_ids||[]).length ? 'bg-slate-700/40' : ''">
+                <input type="radio" name="auth_none_toggle"
+                       :checked="!(form.auth_record_ids||[]).length"
+                       @change="form.auth_record_ids=[]; form.auth_record_id=''"/>
+                <span class="text-slate-300 font-medium">No Authentication</span>
+                <span class="ml-auto text-[10px] text-slate-500">scan unauthenticated</span>
+              </label>
+              <template x-if="authRecords.length === 0">
+                <div class="px-3 py-2 text-xs text-gray-500">No auth records — <a href="/auth-records" class="text-teal-400 hover:underline">create one</a>.</div>
+              </template>
+              <template x-for="(a, idx) in authRecords" :key="a.id">
+                <label class="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm hover:bg-white/5"
+                       :class="(form.auth_record_ids||[]).indexOf(a.id) === 0 ? 'bg-teal-500/10' : ''">
+                  <input type="checkbox" :value="a.id" x-model="form.auth_record_ids"
+                         @change="form.auth_record_id = (form.auth_record_ids||[])[0] || ''"/>
+                  <span x-text="a.name + ' — ' + a.auth_type"></span>
+                  <template x-if="authRoleLabel(a)">
+                    <span class="ml-1 px-1.5 py-0.5 rounded text-[10px]"
+                          style="background:rgba(45,212,191,.15);color:#5eead4"
+                          x-text="'role:' + authRoleLabel(a)"></span>
+                  </template>
+                  <template x-if="!authRoleLabel(a) && (form.auth_record_ids||[]).includes(a.id)">
+                    <span class="ml-1 text-[10px]" style="color:#fbbf24"
+                          title="No role:* tag on this record — BizLogic will fall back to a slug of the name. Add a tag like role:admin on the Auth Records page for stable cross-identity grouping.">⚠ no role tag</span>
+                  </template>
+                  <template x-if="(form.auth_record_ids||[])[0] === a.id">
+                    <span class="ml-auto text-[10px]" style="color:#5eead4">primary (crawl)</span>
+                  </template>
+                </label>
+              </template>
+            </div>
+            <template x-if="(form.auth_record_ids||[]).length >= 2">
+              <div class="callout callout-accent mt-2">
+                ✓ <strong x-text="(form.auth_record_ids||[]).length"></strong> identities selected — BizLogic cross-identity checks (BOLA / IDOR / priv-esc / cross-tenant) will run automatically. The first selected record is used for crawl; the rest are attacker identities.
+              </div>
+            </template>
+            <div class="mt-2">
+              <label class="flex items-center gap-2 cursor-pointer text-sm">
+                <input type="checkbox" x-model="form.auth_ai_decision"/>
+                <span>AI session verification (auth_ai_decision)</span>
+              </label>
+            </div>
+            <template x-if="!form.auth_record_id">
+              <div class="callout mt-2" style="background:rgba(71,85,105,.25);border:1px solid rgba(71,85,105,.5);color:#94a3b8;padding:8px 12px;border-radius:6px;font-size:12px">
+                Scanning without authentication — only unauthenticated pages will be crawled and audited.
+                <a href="/auth-records" class="text-teal-400 hover:underline ml-1">Add an auth record</a> to scan behind login.
+              </div>
+            </template>
+          </div>
+
+          <!-- Playwright Nextgen Engine Options -->
+          <div class="section-card is-accent">
+            <div class="section-head">
+              <div>
+                <div class="section-title">⚡ Playwright Nextgen Engine</div>
+                <div class="section-desc">
+                  Uses the Authentication record selected above. ZAP and Burp will run audit-only.
+                </div>
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-x-6 gap-y-2 mt-1">
+              <label class="flex items-center gap-2 text-xs cursor-pointer">
+                <input type="checkbox" x-model="form.engine_parallel"/>
+                Run ZAP + Burp audits in parallel
+              </label>
+              <label class="flex items-center gap-2 text-xs cursor-pointer">
+                <input type="checkbox" x-model="form.engine_record_workflows"/>
+                Record multi-step business workflows <span class="text-gray-400">(headed browser)</span>
+              </label>
+              <label class="flex items-center gap-2 text-xs cursor-pointer">
+                <input type="checkbox" x-model="form.engine_fuzz_ws"/>
+                Fuzz WebSocket / GraphQL
+              </label>
+              <label class="flex items-center gap-2 text-xs cursor-pointer">
+                <input type="checkbox" x-model="form.engine_headed"/>
+                Show browser (watch live)
+              </label>
+            </div>
+            <template x-if="form.engine_headed">
+              <div class="form-row mt-3">
+                <label class="form-label text-xs">Slow-mo delay per action (ms) <span class="text-gray-500">— optional</span></label>
+                <input class="form-control" type="number" min="0" max="2000" placeholder="0" x-model.number="form.engine_slow_mo"/>
+              </div>
+            </template>
+            <!-- API Security (OWASP API Top 10) per-scan -->
+            <div class="mt-4" style="border-top:1px dashed var(--border-muted);padding-top:12px">
+              <div style="font-weight:600;color:#fdba74;margin-bottom:6px">🔌 API Security (OWASP API Top 10)</div>
+              <label class="flex items-center gap-2 text-xs cursor-pointer">
+                <input type="checkbox" x-model="form.api_security"/>
+                <span>Run the API scanner after the web DAST stage (BOLA, broken auth, BFLA, SSRF, mass-assignment, rate-limit, misconfig)</span>
+              </label>
+              <template x-if="form.api_security">
+                <div class="mt-2 pl-5 grid grid-cols-2 gap-2" style="border-left:2px solid rgba(251,146,60,.35)">
+                  <label class="form-label text-xs col-span-2">OpenAPI / Swagger URL or path <span class="text-gray-500">— optional (else the target is probed)</span>
+                    <input class="form-control" type="text" placeholder="https://api.target.com/openapi.json" x-model="form.api_openapi"/>
+                  </label>
+                  <label class="form-label text-xs">HAR file path <span class="text-gray-500">— optional</span>
+                    <input class="form-control" type="text" placeholder="/path/to/capture.har" x-model="form.api_har"/>
+                  </label>
+                  <label class="form-label text-xs">Authorization header <span class="text-gray-500">— optional</span>
+                    <input class="form-control" type="text" placeholder="Bearer eyJ…" x-model="form.api_auth_header"/>
+                  </label>
+                  <label class="flex items-center gap-2 text-xs cursor-pointer mt-1">
+                    <input type="checkbox" x-model="form.api_active_write"/> Active write tests (mass-assignment) — mutates data
+                  </label>
+                  <label class="flex items-center gap-2 text-xs cursor-pointer mt-1">
+                    <input type="checkbox" x-model="form.api_rate_limit_test"/> Rate-limit test
+                  </label>
+                </div>
+              </template>
+            </div>
+            <!-- NextGen Scanner (Argux chain engine + mutation fuzzer) per-scan -->
+            <div class="mt-4" style="border-top:1px dashed var(--border-muted);padding-top:12px">
+              <div style="font-weight:600;color:#a78bfa;margin-bottom:6px">🧬 NextGen Scanner (Argux) — Experimental</div>
+              <label class="flex items-center gap-2 text-xs cursor-pointer">
+                <input type="checkbox" x-model="form.nextgen_scanner"/>
+                <span>Run the stateful chain engine + mutation fuzzer (IDOR cross-user, priv-esc, auth-bypass, token-replay, business-logic chains) after API Security</span>
+              </label>
+              <template x-if="form.nextgen_scanner">
+                <div class="mt-2 pl-5 grid grid-cols-2 gap-2" style="border-left:2px solid rgba(167,139,250,.35)">
+                  <label class="form-label text-xs">Mode
+                    <select class="form-control" x-model="form.nextgen_mode">
+                      <option value="safe">Safe (passive / benign probes)</option>
+                      <option value="attack">Attack (active payloads — authorised targets only)</option>
+                    </select>
+                  </label>
+                  <label class="form-label text-xs">Max endpoints <span class="text-gray-500">— cost control</span>
+                    <input class="form-control" type="number" min="1" max="500" x-model.number="form.nextgen_max_endpoints"/>
+                  </label>
+                  <div class="text-xs text-slate-500 col-span-2">
+                    Reuses the OpenAPI/HAR source and Authorization header configured above for API Security.
+                  </div>
+                </div>
+              </template>
+            </div>
+            <div class="mt-4" style="border-top:1px dashed var(--border-muted);padding-top:12px">
+              <div style="font-weight:600;color:#c4b5fd;margin-bottom:6px">✨ AI features (per-scan override)</div>
+              <label class="flex items-center gap-2 text-xs cursor-pointer">
+                <input type="checkbox" x-model="form.ai_override_enabled"/>
+                <span>Override global <code>config/ai_settings.yaml</code> for this scan</span>
+              </label>
+              <template x-if="form.ai_override_enabled">
+                <div class="mt-2 pl-5" style="border-left:2px solid rgba(167,139,250,.35)">
+                  <label class="flex items-center gap-2 text-xs cursor-pointer">
+                    <input type="checkbox" x-model="form.ai_master_enabled"/>
+                    <span>Master AI toggle <span class="text-gray-500">(off = pure deterministic mode)</span></span>
+                  </label>
+                  <div class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1" :class="!form.ai_master_enabled && 'opacity-50 pointer-events-none'">
+                    <label class="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" x-model="form.ai_login_generation"/>Login generation (selector AI)</label>
+                    <label class="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" x-model="form.ai_crawl_prioritization"/>Crawl prioritization</label>
+                    <label class="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" x-model="form.ai_coverage_gap_analysis"/>Coverage gap analysis</label>
+                    <label class="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" x-model="form.ai_workflow_synthesis"/>Workflow synthesis</label>
+                    <label class="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" x-model="form.ai_websocket_fuzz_seeds"/>WebSocket fuzz seeds</label>
+                    <label class="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" x-model="form.ai_csrf_inference"/>CSRF inference</label>
+                    <label class="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" x-model="form.ai_finding_triage"/>Finding triage</label>
+                  </div>
+                </div>
+              </template>
+            </div>
+
+            <div class="mt-4 text-xs" style="color:var(--text-secondary)">
+              <div style="font-weight:600;color:var(--text-secondary);margin-bottom:4px">API surface (auto-discovered from selected Web Application)</div>
+              <div class="callout callout-info">
+                <div>OpenAPI / Swagger:
+                  <span x-text="(selectedWebAppEndpointDef().openapi_url || selectedWebAppEndpointDef().swagger_file) || '— none configured on Web App —'"
+                        :style="(selectedWebAppEndpointDef().openapi_url || selectedWebAppEndpointDef().swagger_file) ? 'color:#86efac' : 'color:var(--text-muted)'"></span>
+                </div>
+                <div class="mt-1">GraphQL endpoint:
+                  <span x-text="selectedWebAppEndpointDef().graphql_endpoint || '— none configured on Web App —'"
+                        :style="selectedWebAppEndpointDef().graphql_endpoint ? 'color:#86efac' : 'color:var(--text-muted)'"></span>
+                </div>
+                <div class="mt-2 text-xs" style="color:var(--text-muted)">
+                  Configure these on the Web Application page → <span style="color:var(--accent)">Web App Endpoint Definition</span> section.
+                  <a href="/webapps" class="text-teal-400 hover:underline ml-1">Open Web Apps</a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Scanner Appliance -->
+          <div class="section-card">
+            <div class="section-head">
+              <div>
+                <div class="section-title">Scanner Appliance</div>
+                <div class="section-desc">Select a scanner appliance. For perimeter scanning, select <b>External</b>. For internal network scanning, select <b>Individual</b>. For allocating multiple scanner appliances, select <b>Tags</b> (Scanner Pool).</div>
+              </div>
+            </div>
+            <div class="choice-row mt-1">
+              <label class="choice"><input type="radio" x-model="form.scanner_appliance.type" value="external"/><span>External</span></label>
+              <label class="choice"><input type="radio" x-model="form.scanner_appliance.type" value="individual"/><span>Individual</span></label>
+              <label class="choice"><input type="radio" x-model="form.scanner_appliance.type" value="tags"/><span>Tags (Scanner Pool)</span></label>
+            </div>
+            <div x-show="form.scanner_appliance.type==='individual'" class="mt-2">
+              <select class="form-select" x-show="agents.length" x-model="form.scanner_appliance.appliance_id">
+                <option value="">— select a scanner agent —</option>
+                <template x-for="a in agents" :key="a.id">
+                  <option :value="a.id" x-text="a.name + (a.labels && a.labels.network ? ' — '+a.labels.network : '') + '  ('+a.status+', '+(a.capabilities||[]).join('/')+')'"></option>
+                </template>
+              </select>
+              <input x-show="!agents.length" class="form-control" placeholder="Appliance hostname or ID" x-model="form.scanner_appliance.appliance_id"/>
+              <div x-show="!agents.length" class="text-slate-500" style="font-size:11px;margin-top:4px;">
+                No online scanner agents. Enrol one on the <a href="/agents" class="text-teal-400 hover:underline">Scanner Agents</a> page, or type an id/hostname.
+              </div>
+            </div>
+            <div x-show="form.scanner_appliance.type==='tags'" class="mt-2">
+              <input class="form-control" placeholder="comma-separated tags (e.g. corp-dmz, internal)"
+                     :value="(form.scanner_appliance.tags||[]).join(', ')"
+                     @input="form.scanner_appliance.tags = $event.target.value.split(',').map(t=>t.trim()).filter(Boolean)"/>
+              <div x-show="poolLabels().length" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                <span class="text-slate-500" style="font-size:11px;">Available pools:</span>
+                <template x-for="lbl in poolLabels()" :key="lbl">
+                  <span @click="if(!(form.scanner_appliance.tags||[]).includes(lbl)) form.scanner_appliance.tags=[...(form.scanner_appliance.tags||[]),lbl]"
+                        style="cursor:pointer;font-size:10.5px;font-weight:600;padding:2px 9px;border-radius:5px;background:var(--card-bg-alt);border:1px solid var(--border);color:var(--text-secondary);"
+                        x-text="lbl"></span>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          <!-- Proxy Support -->
+          <div class="section-card">
+            <div class="section-head">
+              <div>
+                <div class="section-title">Proxy Support</div>
+                <div class="section-desc">Select a proxy server for WAS scan.</div>
+              </div>
+              <label class="toggle-switch"><input type="checkbox" x-model="form.proxy.enabled"/><span class="toggle-slider"></span></label>
+            </div>
+            <div x-show="form.proxy.enabled" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+              <input class="form-control" placeholder="Proxy name" x-model="form.proxy.name"/>
+              <input class="form-control" placeholder="http://proxy.internal:3128" x-model="form.proxy.url"/>
+              <input class="form-control" placeholder="Username (optional)" x-model="form.proxy.username"/>
+              <input type="password" class="form-control" placeholder="Password (optional)" x-model="form.proxy.password"/>
+            </div>
+            <div x-show="form.proxy.enabled" class="text-xs text-amber-300 mt-2">If you select a proxy server, the DNS Override option will not be available.</div>
+          </div>
+
+          <!-- DNS Override -->
+          <div class="section-card">
+            <div class="section-head">
+              <div>
+                <div class="section-title">DNS Override</div>
+                <div class="section-desc">Select a DNS override record with mappings to be used for scanning. If you select a proxy server for scan, the DNS override will be ignored.</div>
+              </div>
+              <label class="toggle-switch"><input type="checkbox" x-model="form.dns_override.enabled" :disabled="form.proxy.enabled"/><span class="toggle-slider"></span></label>
+            </div>
+            <div x-show="form.dns_override.enabled && !form.proxy.enabled">
+              <template x-for="(rec, idx) in form.dns_override.records" :key="idx">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-1">
+                  <input class="form-control" placeholder="hostname" x-model="rec.hostname"/>
+                  <div class="flex gap-2">
+                    <input class="form-control" placeholder="ip address" x-model="rec.ip"/>
+                    <button class="btn btn-sm btn-secondary" @click="form.dns_override.records.splice(idx,1)" type="button">Remove</button>
+                  </div>
+                </div>
+              </template>
+              <button class="btn btn-sm btn-secondary mt-1" type="button" @click="form.dns_override.records.push({hostname:'',ip:''})">+ Add Record</button>
+            </div>
+          </div>
+
+          <!-- Progressive Scanning -->
+          <div class="section-card">
+            <div class="section-head">
+              <div>
+                <div class="section-title">Progressive Scanning</div>
+                <div class="section-desc">Progressive Scanning lets your scans verify findings already detected on this application. This will ensure that all your scan results will be taken into account even if they have to be cancelled.</div>
+              </div>
+            </div>
+            <label class="flex items-center gap-2 cursor-pointer text-sm">
+              <input type="checkbox" x-model="form.progressive_scanning"/>
+              <span>Progressive Scanning</span>
+            </label>
+          </div>
+
+          <!-- Cancel Scan -->
+          <div class="section-card">
+            <div class="section-head">
+              <div>
+                <div class="section-title">Cancel Scan</div>
+                <div class="section-desc">By default, the scan runs until it completes or the maximum scan time is reached. Select the options to cancel the scan after a defined time period or at a certain defined time.</div>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <select class="form-select" x-model="form.cancel_scan.option">
+                <option value="never">Do not Cancel Scan</option>
+                <option value="after_minutes">Cancel after N minutes</option>
+                <option value="after_daily_window">Cancel after daily time window (hours)</option>
+              </select>
+              <input x-show="form.cancel_scan.option!=='never'" type="number" class="form-control"
+                     :placeholder="form.cancel_scan.option==='after_minutes' ? 'minutes' : 'hours'"
+                     x-model.number="form.cancel_scan.value"/>
+            </div>
+          </div>
+
+          <!-- Email Notification -->
+          <div class="section-card">
+            <div class="section-head">
+              <div>
+                <div class="section-title">Email Notification</div>
+                <div class="section-desc">Select the check box to receive an email when a scan is completed, failed, or cancelled.</div>
+              </div>
+            </div>
+            <label class="flex items-center gap-2 cursor-pointer text-sm">
+              <input type="checkbox" x-model="form.send_email"/>
+              <span>Send mail at scan completion</span>
+            </label>
+          </div>
+
+          <!-- Pillars — only meaningful for full vulnerability pipeline. -->
+          <div class="section-card" x-show="form.scan_type === 'vulnerability'">
+            <div class="section-head"><div class="section-title">Post-processing pillars</div></div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <template x-for="pillar in pillars" :key="pillar.key">
+                <label class="flex items-center gap-2 text-xs cursor-pointer">
+                  <input type="checkbox" x-model="pillar.enabled"/>
+                  <span x-text="pillar.label"></span>
+                </label>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Step 3: Review And Confirm ─────────────────────────────── -->
+        <div x-show="step===3" style="display:grid;gap:14px">
+          <div>
+            <h4 class="text-base font-semibold text-gray-200">Review And Confirm</h4>
+            <p class="text-xs text-gray-500 mt-1">Cross-check before launching.</p>
+          </div>
+          <div class="card" style="padding:14px">
+            <div class="kv-row"><div class="kv-key">Name</div><div class="kv-val font-medium" x-text="form.name||'—'"></div></div>
+            <div class="kv-row"><div class="kv-key">Scan Type</div><div class="kv-val" x-text="form.scan_type"></div></div>
+            <div class="kv-row"><div class="kv-key">Engine</div><div class="kv-val">Playwright Nextgen</div></div>
+            <div class="kv-row">
+              <div class="kv-key">Auth Source</div>
+              <div class="kv-val" x-text="(authRecords.find(a => a.id === form.auth_record_id) || {}).name || '— none —'"></div>
+            </div>
+            <div class="kv-row"><div class="kv-key">Web Scanner</div><div class="kv-val" x-text="form.scanner_tool"></div></div>
+            <div class="kv-row"><div class="kv-key">Scan Target</div><div class="kv-val" x-text="targetSummary()"></div></div>
+            <div class="kv-row"><div class="kv-key">Option Profile</div><div class="kv-val" x-text="form.profile||'(defaults)'"></div></div>
+            <div class="kv-row"><div class="kv-key">AI Optimization (override)</div><div class="kv-val" :class="form.ai_override_enabled ? 'text-purple-300' : 'text-gray-500'" x-text="form.ai_override_enabled ? 'Enabled' : 'Disabled'"></div></div>
+            <div class="kv-row"><div class="kv-key">AI Auth Verification</div><div class="kv-val" :class="form.auth_ai_decision ? 'text-purple-300' : 'text-gray-500'" x-text="form.auth_ai_decision ? 'Enabled' : 'Disabled'"></div></div>
+            <div class="kv-row"><div class="kv-key">Authentication</div><div class="kv-val" x-text="authSummary()"></div></div>
+            <div class="kv-row"><div class="kv-key">Scanner Appliance</div><div class="kv-val" x-text="applianceSummary()"></div></div>
+            <div class="kv-row"><div class="kv-key">Proxy</div><div class="kv-val" x-text="form.proxy.enabled ? (form.proxy.url || '(set)') : 'None'"></div></div>
+            <div class="kv-row"><div class="kv-key">DNS Override</div><div class="kv-val" x-text="form.dns_override.enabled && !form.proxy.enabled ? `${form.dns_override.records.length} record(s)` : 'None'"></div></div>
+            <div class="kv-row"><div class="kv-key">Progressive Scanning</div><div class="kv-val" x-text="form.progressive_scanning ? 'Enabled' : 'Disabled'"></div></div>
+            <div class="kv-row"><div class="kv-key">Cancel Scan</div><div class="kv-val" x-text="cancelSummary()"></div></div>
+            <div class="kv-row"><div class="kv-key">Email Notification</div><div class="kv-val" x-text="form.send_email ? 'Yes' : 'No'"></div></div>
+          </div>
+        </div>
+
+        <!-- DAST footer buttons -->
+        <div class="flex justify-between items-center mt-6">
+          <button class="btn btn-secondary" @click="step>1?step--:window.location='/scans'" x-text="step>1?'← Previous':'Cancel'"></button>
+          <button class="btn btn-primary" @click="wizardNext()" :disabled="saving">
+            <span x-text="step<wizardSteps.length?'Next →':(saving?'Launching…':'Launch Scan')"></span>
+          </button>
+        </div>
+
+        <!-- ── Burp Rate Limiting Modal ─────────────────────────────────── -->
+        <div class="modal-overlay" x-show="burpRateModal" @click.self="burpRateModal=false" x-cloak
+             style="z-index:1100">
+          <div class="modal" style="max-width:520px;width:95%">
+            <div class="modal-header">
+              <h3 style="display:flex;align-items:center;gap:8px">
+                ⚙ Burp Pro — Rate Limiting &amp; Concurrency
+                <span style="font-size:11px;font-weight:400;color:var(--text-muted)">(this scan only)</span>
+              </h3>
+              <button class="modal-close" @click="burpRateModal=false">×</button>
+            </div>
+            <div class="modal-body">
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border-radius:6px;border:1px solid var(--border);margin-bottom:16px"
+                     :style="burpRate.useGlobal ? 'background:rgba(20,184,166,.06);border-color:rgba(20,184,166,.3)' : 'background:var(--card-bg-alt)'">
+                <input type="checkbox" x-model="burpRate.useGlobal"
+                       style="width:15px;height:15px;accent-color:var(--accent)"/>
+                <div>
+                  <div class="text-sm font-medium">Use global settings</div>
+                  <div class="text-xs text-gray-400">Values from Settings → Burp Pro → Rate Limiting &amp; Concurrency</div>
+                </div>
+              </label>
+
+              <div x-show="!burpRate.useGlobal" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div>
+                  <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">
+                    Request Throttle (ms)
+                    <span style="color:var(--text-muted);font-style:italic"> — 0 = no delay</span>
+                  </label>
+                  <input type="number" x-model="burpRate.throttle_ms" min="0" max="10000" step="50"
+                         placeholder="0"
+                         style="width:100%;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text-primary);font-size:13px"/>
+                </div>
+                <div>
+                  <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">
+                    Max Requests / Second
+                    <span style="color:var(--text-muted);font-style:italic"> — 0 = unlimited</span>
+                  </label>
+                  <input type="number" x-model="burpRate.max_rps" min="0" max="500" step="5"
+                         placeholder="0"
+                         style="width:100%;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text-primary);font-size:13px"/>
+                </div>
+                <div>
+                  <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">
+                    Crawl Threads
+                    <span style="color:var(--text-muted);font-style:italic"> — concurrent spider</span>
+                  </label>
+                  <input type="number" x-model="burpRate.crawl_threads" min="1" max="50" step="1"
+                         placeholder="10"
+                         style="width:100%;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text-primary);font-size:13px"/>
+                </div>
+                <div>
+                  <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">
+                    Audit Threads
+                    <span style="color:var(--text-muted);font-style:italic"> — concurrent checks</span>
+                  </label>
+                  <input type="number" x-model="burpRate.audit_threads" min="1" max="50" step="1"
+                         placeholder="10"
+                         style="width:100%;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text-primary);font-size:13px"/>
+                </div>
+              </div>
+              <div x-show="!burpRate.useGlobal" style="margin-top:12px;font-size:11px;color:var(--text-muted)">
+                These values override the global settings for this scan only. Global defaults remain unchanged.
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" @click="burpRate.useGlobal=true; burpRateModal=false">
+                Reset to Global
+              </button>
+              <button class="btn btn-primary" @click="burpRateModal=false">
+                Save &amp; Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════ DEVSECOPS PANEL ═════════════════════════ -->
+      <div x-show="kind==='devsecops'" x-data="dsNewScan()" x-init="init()">
+
+        <!-- Step indicator -->
+        <div class="wizard-steps mb-6">
+          <template x-for="(s, i) in steps" :key="i">
+            <div class="wizard-step" :class="step===i+1?'active':step>i+1?'done':''">
+              <div class="step-num" x-text="step > i+1 ? '✓' : i+1"></div>
+              <div class="step-label" x-text="s"></div>
+              <template x-if="i < steps.length-1">
+                <div style="flex:1;height:1px;background:var(--border-muted);margin:0 8px"></div>
+              </template>
+            </div>
+          </template>
+        </div>
+
+        <!-- ── Step 1: Source & Scan Type ─────────────────────────────────── -->
+        <div x-show="step===1">
+
+          <!-- Scan name -->
+          <div class="section-card">
+            <div class="section-head">
+              <div>
+                <div class="section-title">Scan Name</div>
+                <div class="section-desc">Auto-generated from repo; edit as needed.</div>
+              </div>
+            </div>
+            <div class="form-row mb-0">
+              <input class="form-control w-full" placeholder="e.g. my-repo DevSecOps 2026-06-02"
+                     x-model="form.name"/>
+            </div>
+          </div>
+
+          <!-- Source repository -->
+          <div class="section-card is-accent">
+            <div class="section-head">
+              <div>
+                <div class="section-title">Source Repository</div>
+                <div class="section-desc">Select a registered repo or enter a Git URL manually. The source tree will be cloned for analysis.</div>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <label class="form-label">Registered Repository</label>
+              <select class="form-input w-full" x-model="selectedRepoId"
+                      @change="applyRepo()">
+                <option value="">— Select from Repositories —</option>
+                <template x-for="r in repos" :key="r.id">
+                  <option :value="r.id" x-text="'#'+r.ref_id+' '+r.name+' — '+r.url"></option>
+                </template>
+                <option value="__manual__">✏ Enter URL manually…</option>
+              </select>
+              <template x-if="selectedRepoId && selectedRepoId !== '__manual__'">
+                <div class="mt-1 flex items-center gap-2">
+                  <span class="font-mono text-xs text-teal-300" x-text="form.git_url"></span>
+                </div>
+              </template>
+            </div>
+
+            <template x-if="selectedRepoId === '__manual__'">
+              <div class="form-row">
+                <label class="form-label">Git URL</label>
+                <input class="form-control w-full font-mono" placeholder="https://github.com/org/repo.git"
+                       x-model="form.git_url" @input="updateNameFromUrl()"/>
+              </div>
+            </template>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div class="form-row mb-0">
+                <label class="form-label">Branch</label>
+                <input class="form-control w-full font-mono" placeholder="main" x-model="form.branch"/>
+              </div>
+              <div class="form-row mb-0">
+                <label class="form-label">Commit / Tag <span class="text-slate-600">(optional)</span></label>
+                <input class="form-control w-full font-mono" placeholder="HEAD or sha1…" x-model="form.commit"/>
+              </div>
+            </div>
+          </div>
+
+          <!-- Scan phase -->
+          <div class="section-card">
+            <div class="section-head">
+              <div>
+                <div class="section-title">Scan Phase <span class="text-xs text-slate-500">(D.6 — drives per-phase gate rules)</span></div>
+                <div class="section-desc">Controls which gate policy strictness applies when evaluating findings.</div>
+              </div>
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              <div class="phase-card" :class="form.scan_phase==='pr'?'selected':''" @click="form.scan_phase='pr'">
+                <div class="text-sm font-semibold text-teal-400">PR / Pre-merge</div>
+                <div class="text-xs text-slate-500 mt-1">Diff-aware — scans only changed code vs. baseline; gate blocks only on <em>net-new</em> critical/high</div>
+              </div>
+              <div class="phase-card" :class="form.scan_phase==='staging'?'selected':''" @click="form.scan_phase='staging'">
+                <div class="text-sm font-semibold text-amber-400">Staging</div>
+                <div class="text-xs text-slate-500 mt-1">Standard gate — block on high severity findings</div>
+              </div>
+              <div class="phase-card" :class="form.scan_phase==='production'?'selected':''" @click="form.scan_phase='production'">
+                <div class="text-sm font-semibold text-red-400">Production (strict)</div>
+                <div class="text-xs text-slate-500 mt-1">Strict gate — zero tolerance for high/critical</div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /step 1 -->
+
+        <!-- ── Step 2: Scanner Selection ───────────────────────────────────── -->
+        <div x-show="step===2">
+
+          <div class="callout callout-accent mb-4 flex items-center justify-between">
+            <span class="text-xs">AI can suggest the best scanners based on your repo URL and detected tech stack.</span>
+            <button class="text-xs text-teal-300 hover:underline ml-3 flex-shrink-0"
+                    :disabled="aiLoading" @click="aiSuggest()">
+              <span x-show="!aiLoading">✨ AI: suggest scanners</span>
+              <span x-show="aiLoading">thinking…</span>
+            </button>
+          </div>
+          <div x-show="aiRationale" class="callout mb-4 text-xs italic text-slate-400" x-text="aiRationale"></div>
+
+          <!-- SAST -->
+          <div class="section-card">
+            <div class="section-head">
+              <div>
+                <div class="section-title">SAST — Static Application Security Testing</div>
+                <div class="section-desc">Analyzes source code for security vulnerabilities, injection patterns, and logic flaws.</div>
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <template x-for="t in allTools.filter(t=>t.cat==='sast')" :key="t.name">
+                <label class="tool-check">
+                  <input type="checkbox" :value="t.name" x-model="form.scanners" class="accent-teal-500"/>
+                  <span x-text="t.label"></span>
+                  <span :class="'cat-chip cat-sast'" x-text="t.cat.toUpperCase()"></span>
+                  <span x-show="!t.available" class="text-[10px] text-slate-600">(not installed)</span>
+                </label>
+              </template>
+            </div>
+          </div>
+
+          <!-- SCA -->
+          <div class="section-card">
+            <div class="section-head">
+              <div>
+                <div class="section-title">SCA — Software Composition Analysis</div>
+                <div class="section-desc">Scans open-source dependencies for known CVEs and license issues.</div>
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <template x-for="t in allTools.filter(t=>t.cat==='sca')" :key="t.name">
+                <label class="tool-check">
+                  <input type="checkbox" :value="t.name" x-model="form.scanners" class="accent-teal-500"/>
+                  <span x-text="t.label"></span>
+                  <span :class="'cat-chip cat-sca'" x-text="t.cat.toUpperCase()"></span>
+                  <span x-show="!t.available" class="text-[10px] text-slate-600">(not installed)</span>
+                </label>
+              </template>
+            </div>
+          </div>
+
+          <!-- Secrets -->
+          <div class="section-card">
+            <div class="section-head">
+              <div>
+                <div class="section-title">Secrets Detection</div>
+                <div class="section-desc">Finds hardcoded credentials, API keys, tokens, and private keys in source code and git history.</div>
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <template x-for="t in allTools.filter(t=>t.cat==='secrets')" :key="t.name">
+                <label class="tool-check">
+                  <input type="checkbox" :value="t.name" x-model="form.scanners" class="accent-teal-500"/>
+                  <span x-text="t.label"></span>
+                  <span :class="'cat-chip cat-secrets'" x-text="t.cat.toUpperCase()"></span>
+                  <span x-show="!t.available" class="text-[10px] text-slate-600">(not installed)</span>
+                  <span x-show="t.needs_key && !t.key_ok" class="text-[10px] text-amber-500">⚠ API key needed</span>
+                </label>
+              </template>
+            </div>
+          </div>
+
+          <!-- IaC -->
+          <div class="section-card">
+            <div class="section-head">
+              <div>
+                <div class="section-title">IaC — Infrastructure as Code</div>
+                <div class="section-desc">Checks Terraform, Kubernetes, CloudFormation, Helm charts for misconfigurations.</div>
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <template x-for="t in allTools.filter(t=>t.cat==='iac')" :key="t.name">
+                <label class="tool-check">
+                  <input type="checkbox" :value="t.name" x-model="form.scanners" class="accent-teal-500"/>
+                  <span x-text="t.label"></span>
+                  <span :class="'cat-chip cat-iac'" x-text="t.cat.toUpperCase()"></span>
+                  <span x-show="!t.available" class="text-[10px] text-slate-600">(not installed)</span>
+                </label>
+              </template>
+            </div>
+          </div>
+
+          <!-- Optional DAST -->
+          <div class="section-card" :class="form.include_dast ? 'is-accent' : ''">
+            <div class="section-head">
+              <div>
+                <div class="section-title flex items-center gap-2">
+                  <input type="checkbox" class="accent-teal-500" x-model="form.include_dast"/>
+                  Also run DAST (web application scan)
+                  <span class="cat-chip cat-dast">DAST</span>
+                </div>
+                <div class="section-desc">Enable Playwright + Burp Pro / ZAP active scan against the linked web application after DevSecOps stages complete.
+                  Need a web-app-first scan with full DAST controls (proxy, DNS, cancel windows, multi-identity auth)? <a href="javascript:void(0)" @click.prevent="window.dispatchEvent(new CustomEvent('set-launch-kind',{detail:'dast'}))" class="text-teal-400 hover:underline">Use the DAST launcher →</a>
+                </div>
+              </div>
+            </div>
+
+            <template x-if="form.include_dast">
+              <div class="space-y-3 mt-2">
+                <div class="form-row mb-0">
+                  <label class="form-label">Web Application Target</label>
+                  <select class="form-input w-full" x-model="form.web_app_id">
+                    <option value="">— select web app —</option>
+                    <template x-for="a in webapps" :key="a.id">
+                      <option :value="a.id" x-text="a.name + ' — ' + a.url"></option>
+                    </template>
+                  </select>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="form-row mb-0">
+                    <label class="form-label">Web Scanner</label>
+                    <div class="choice-row">
+                      <label class="choice"><input type="radio" x-model="form.scanner_tool" value="burp"/><span>Burp Pro</span></label>
+                      <label class="choice"><input type="radio" x-model="form.scanner_tool" value="zap"/><span>ZAP</span></label>
+                      <label class="choice"><input type="radio" x-model="form.scanner_tool" value="both"/><span>Both</span></label>
+                    </div>
+                  </div>
+                  <div class="form-row mb-0">
+                    <label class="form-label">DAST Scan Type</label>
+                    <div class="choice-row">
+                      <label class="choice"><input type="radio" x-model="form.scan_type" value="vulnerability"/><span>Vulnerability</span></label>
+                      <label class="choice"><input type="radio" x-model="form.scan_type" value="discovery"/><span>Discovery</span></label>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-row mb-0">
+                  <label class="form-label">Engine options</label>
+                  <div class="flex flex-wrap gap-x-5 gap-y-2 text-xs">
+                    <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" x-model="form.engine_parallel"/> Run ZAP + Burp in parallel</label>
+                    <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" x-model="form.engine_record_workflows"/> Record business workflows</label>
+                    <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" x-model="form.engine_fuzz_ws"/> Fuzz WebSocket / GraphQL</label>
+                    <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" x-model="form.engine_headed"/> Show browser (live)</label>
+                  </div>
+                </div>
+
+                <div class="form-row mb-0" style="border-top:1px dashed var(--border-muted);padding-top:10px">
+                  <label class="flex items-center gap-2 cursor-pointer text-sm" style="color:#fdba74;font-weight:600">
+                    <input type="checkbox" x-model="form.api_security"/> 🔌 API Security (OWASP API Top 10)
+                  </label>
+                  <div class="text-xs text-slate-500 mt-1">Runs the API scanner after the web DAST stage — BOLA, broken auth, BFLA, SSRF, mass-assignment, rate-limit, misconfig.</div>
+                  <template x-if="form.api_security">
+                    <div class="grid grid-cols-2 gap-2 mt-2 pl-4" style="border-left:2px solid rgba(251,146,60,.35)">
+                      <input class="form-input" type="text" placeholder="OpenAPI/Swagger URL or path (optional)" x-model="form.api_openapi"/>
+                      <input class="form-input" type="text" placeholder="HAR file path (optional)" x-model="form.api_har"/>
+                      <input class="form-input col-span-2" type="text" placeholder="Authorization header e.g. Bearer … (optional)" x-model="form.api_auth_header"/>
+                      <label class="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" x-model="form.api_active_write"/> Active write tests (mutates data)</label>
+                      <label class="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" x-model="form.api_rate_limit_test"/> Rate-limit test</label>
+                    </div>
+                  </template>
+                </div>
+
+                <div class="form-row mb-0" style="border-top:1px dashed var(--border-muted);padding-top:10px">
+                  <label class="flex items-center gap-2 cursor-pointer text-sm" style="color:#a78bfa;font-weight:600">
+                    <input type="checkbox" x-model="form.nextgen_scanner"/> 🧬 NextGen Scanner (Argux) — Experimental
+                  </label>
+                  <div class="text-xs text-slate-500 mt-1">Stateful chain engine + mutation fuzzer — IDOR cross-user, privilege escalation, auth-bypass, token-replay, and business-logic chains. Runs after API Security.</div>
+                  <template x-if="form.nextgen_scanner">
+                    <div class="grid grid-cols-2 gap-2 mt-2 pl-4" style="border-left:2px solid rgba(167,139,250,.35)">
+                      <label class="form-label text-xs">Mode
+                        <select class="form-input" x-model="form.nextgen_mode">
+                          <option value="safe">Safe (passive / benign probes)</option>
+                          <option value="attack">Attack (active payloads — authorised targets only)</option>
+                        </select>
+                      </label>
+                      <label class="form-label text-xs">Max endpoints
+                        <input class="form-input" type="number" min="1" max="500" x-model.number="form.nextgen_max_endpoints"/>
+                      </label>
+                    </div>
+                  </template>
+                </div>
+
+                <div class="form-row mb-0" style="border-top:1px dashed var(--border-muted);padding-top:10px">
+                  <label class="form-label">Authentication record <span class="text-slate-500 text-xs">— optional; defaults to the linked Web App's configured auth</span></label>
+                  <select class="form-input w-full" x-model="form.auth_record_id">
+                    <option value="">Inherit from Web Application</option>
+                    <template x-for="ar in authRecords" :key="ar.id">
+                      <option :value="ar.id" x-text="(ar.name || ar.id) + (ar.auth_type ? (' — ' + ar.auth_type) : '')"></option>
+                    </template>
+                  </select>
+                </div>
+
+                <div class="form-row mb-0">
+                  <label class="form-label">Post-processing</label>
+                  <div class="flex flex-wrap gap-x-5 gap-y-2 text-xs">
+                    <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" x-model="form.run_nmap"/> Nmap network</label>
+                    <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" x-model="form.run_ai"/> AI enrichment</label>
+                    <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" x-model="form.run_fp"/> FP analysis</label>
+                    <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" x-model="form.run_policy"/> Policy optimisation</label>
+                    <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" x-model="form.run_trend"/> Trend analysis</label>
+                    <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" x-model="form.run_docs"/> Documentation</label>
+                  </div>
+                </div>
+
+                <div class="callout callout-accent text-xs">
+                  DAST will run <strong>after</strong> all DevSecOps stages complete — SAST → SCA → Secrets → IaC → Auth → Crawl → Audit<span x-show="form.api_security"> → API Security</span>.
+                  <span class="text-slate-500">Proxy, DNS, scanner appliance & cancel windows inherit from the linked Web App — <a href="javascript:void(0)" @click.prevent="window.dispatchEvent(new CustomEvent('set-launch-kind',{detail:'dast'}))" class="text-teal-400 hover:underline">use the DAST launcher</a> to override per-run.</span>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <!-- Selector summary -->
+          <div class="callout mt-2 flex items-center justify-between">
+            <span class="text-xs">
+              <span x-text="form.scanners.length"></span> scanner(s) selected:
+              <span class="text-slate-300 font-mono" x-text="form.scanners.join(', ') || '(none)'"></span>
+            </span>
+            <div class="flex gap-2">
+              <button class="text-xs text-teal-400 hover:underline" @click="selectAll()">Select all installed</button>
+              <button class="text-xs text-slate-500 hover:underline" @click="form.scanners=[]">Clear</button>
+            </div>
+          </div>
+
+          <!-- ── Scanner Appliance (where the scan runs) ──────────────────── -->
+          <div class="section-card">
+            <div class="section-head">
+              <div>
+                <div class="section-title">Scanner Appliance</div>
+                <div class="section-desc">Where this DevSecOps scan runs. <b>External</b> runs on the platform host (today's behaviour). <b>Individual</b> pins it to one scanner agent; <b>Tags</b> dispatches to a scanner pool — useful when the source repo is only reachable from a specific network.</div>
+              </div>
+            </div>
+            <div class="choice-row mt-1">
+              <label class="choice"><input type="radio" x-model="form.scanner_appliance.type" value="external"/><span>External</span></label>
+              <label class="choice"><input type="radio" x-model="form.scanner_appliance.type" value="individual"/><span>Individual</span></label>
+              <label class="choice"><input type="radio" x-model="form.scanner_appliance.type" value="tags"/><span>Tags (Scanner Pool)</span></label>
+            </div>
+            <div x-show="form.scanner_appliance.type==='individual'" class="mt-2">
+              <select class="form-select" x-show="capableAgents().length" x-model="form.scanner_appliance.appliance_id">
+                <option value="">— select a scanner agent —</option>
+                <template x-for="a in capableAgents()" :key="a.id">
+                  <option :value="a.id" x-text="a.name + (a.labels && a.labels.network ? ' — '+a.labels.network : '') + '  ('+a.status+', '+(a.capabilities||[]).join('/')+')'"></option>
+                </template>
+              </select>
+              <div x-show="capableAgents().length" class="text-slate-500" style="font-size:11px;margin-top:4px;">
+                Showing only agents that advertise the selected scanners (<span x-text="requiredCaps().join(', ')"></span>).
+              </div>
+              <div x-show="!capableAgents().length" class="text-amber-400" style="font-size:11px;margin-top:4px;">
+                No online agent advertises the selected scanners (<span x-text="requiredCaps().join(', ') || '—'"></span>).
+                Enrol/refresh one on the <a href="/agents" class="text-teal-400 hover:underline">Scanner Agents</a> page (its CAPABILITIES must include these tools), or use <b>Tags</b> / <b>External</b>.
+              </div>
+            </div>
+            <div x-show="form.scanner_appliance.type==='tags'" class="mt-2">
+              <input class="form-control" placeholder="comma-separated tags (e.g. corp-dmz, internal)"
+                     :value="(form.scanner_appliance.tags||[]).join(', ')"
+                     @input="form.scanner_appliance.tags = $event.target.value.split(',').map(t=>t.trim()).filter(Boolean)"/>
+              <div x-show="poolLabels().length" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                <span class="text-slate-500" style="font-size:11px;">Available pools:</span>
+                <template x-for="lbl in poolLabels()" :key="lbl">
+                  <span @click="if(!(form.scanner_appliance.tags||[]).includes(lbl)) form.scanner_appliance.tags=[...(form.scanner_appliance.tags||[]),lbl]"
+                        style="cursor:pointer;font-size:10.5px;font-weight:600;padding:2px 9px;border-radius:5px;background:var(--card-bg-alt);border:1px solid var(--border);color:var(--text-secondary);"
+                        x-text="lbl"></span>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Scan Options (gate + mode) ───────────────────────────────── -->
+          <div class="section-card">
+            <div class="section-head">
+              <div>
+                <div class="section-title">Scan Options</div>
+                <div class="section-desc">Override the global gate policy and scan mode for this specific run only.</div>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <label class="form-label">Scan Mode Override</label>
+              <div class="choice-row">
+                <label class="choice">
+                  <input type="radio" value="" x-model="form.scan_mode_override"/>
+                  <span>Use global setting</span>
+                  <span class="text-[10px] text-slate-500 ml-1">(from Scanner Settings)</span>
+                </label>
+                <label class="choice">
+                  <input type="radio" value="local" x-model="form.scan_mode_override"/>
+                  <span>Force Local</span>
+                  <span class="text-[10px] text-slate-500 ml-1">offline only, no platform push</span>
+                </label>
+                <label class="choice">
+                  <input type="radio" value="platform" x-model="form.scan_mode_override"/>
+                  <span>Force Platform</span>
+                  <span class="text-[10px] text-slate-500 ml-1">push results to tool dashboards</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-row mb-0">
+              <label class="form-label">Gate Policy</label>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <select class="form-input w-full" x-model="form.gate_policy_id">
+                    <option value="">Use default (from Policy Gate Config)</option>
+                    <template x-for="p in gatePolicies" :key="p.id">
+                      <option :value="p.id"
+                              x-text="(p.repo_id ? 'Repo: '+p.repo_id.slice(0,8) : 'Global') + ' — fail_on:'+p.fail_on_severity+' / '+p.branch_pattern"></option>
+                    </template>
+                    <option value="__custom__">Custom threshold (set below)</option>
+                  </select>
+                </div>
+                <div x-show="form.gate_policy_id === '__custom__'" class="grid grid-cols-3 gap-2">
+                  <div>
+                    <select class="form-input w-full" x-model="form.gate_fail_on">
+                      <option value="none">Never fail</option>
+                      <option value="any">Any finding</option>
+                      <option value="low">Low+</option>
+                      <option value="medium">Medium+</option>
+                      <option value="high">High+</option>
+                      <option value="critical">Critical only</option>
+                    </select>
+                    <p class="text-[10px] text-slate-500 mt-0.5">Fail on severity</p>
+                  </div>
+                  <div>
+                    <input type="number" class="form-input w-full" x-model.number="form.gate_max_critical" min="-1" placeholder="0"/>
+                    <p class="text-[10px] text-slate-500 mt-0.5">Max critical (-1=∞)</p>
+                  </div>
+                  <div>
+                    <input type="number" class="form-input w-full" x-model.number="form.gate_max_high" min="-1" placeholder="0"/>
+                    <p class="text-[10px] text-slate-500 mt-0.5">Max high (-1=∞)</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /step 2 -->
+
+        <!-- ── Step 3: Review & Launch ──────────────────────────────────────── -->
+        <div x-show="step===3">
+
+          <div class="section-card">
+            <div class="section-title mb-3">Scan Summary</div>
+            <div class="review-row"><span class="review-key">Scan Name</span><span class="review-val font-mono text-sm" x-text="form.name || '(auto)'"></span></div>
+            <div class="review-row"><span class="review-key">Repository</span><span class="review-val font-mono text-xs" x-text="form.git_url || '—'"></span></div>
+            <div class="review-row"><span class="review-key">Branch</span><span class="review-val font-mono" x-text="form.branch || 'main'"></span></div>
+            <div class="review-row" x-show="form.commit"><span class="review-key">Commit/Tag</span><span class="review-val font-mono text-xs" x-text="form.commit"></span></div>
+            <div class="review-row"><span class="review-key">Scan Phase</span><span class="review-val capitalize" x-text="form.scan_phase"></span></div>
+            <div class="review-row">
+              <span class="review-key">Scan Mode</span>
+              <span class="review-val" x-text="form.scan_mode_override || 'global (use Scanner Settings)'"></span>
+            </div>
+            <div class="review-row">
+              <span class="review-key">Gate Policy</span>
+              <span class="review-val text-xs">
+                <span x-show="!form.gate_policy_id">Default (Policy Gate Config page)</span>
+                <span x-show="form.gate_policy_id === '__custom__'" x-text="'Custom: fail_on='+form.gate_fail_on+' max_critical='+form.gate_max_critical+' max_high='+form.gate_max_high"></span>
+                <span x-show="form.gate_policy_id && form.gate_policy_id !== '__custom__'" x-text="'Policy: '+form.gate_policy_id.slice(0,8)+'…'"></span>
+              </span>
+            </div>
+            <div class="review-row" x-show="form.web_app_id"><span class="review-key">Linked Web App</span><span class="review-val" x-text="webappName(form.web_app_id)"></span></div>
+            <div class="review-row"><span class="review-key">Scanner Appliance</span><span class="review-val" x-text="applianceSummary()"></span></div>
+          </div>
+
+          <!-- DevSecOps pipeline stages preview -->
+          <div class="section-card">
+            <div class="section-title mb-3">Pipeline Stages (in order)</div>
+            <div class="space-y-1.5">
+              <div class="progress-step pending">
+                <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                Pre-flight Check
+              </div>
+              <template x-if="hasCat('sast')">
+                <div class="progress-step pending"><span class="cat-chip cat-sast">SAST</span> Code Analysis — <span x-text="form.scanners.filter(s=>catOf(s)==='sast').join(', ')"></span></div>
+              </template>
+              <template x-if="hasCat('sca')">
+                <div class="progress-step pending"><span class="cat-chip cat-sca">SCA</span> Dependency Analysis — <span x-text="form.scanners.filter(s=>catOf(s)==='sca').join(', ')"></span></div>
+              </template>
+              <template x-if="hasCat('secrets')">
+                <div class="progress-step pending"><span class="cat-chip cat-secrets">Secrets</span> Detection — <span x-text="form.scanners.filter(s=>catOf(s)==='secrets').join(', ')"></span></div>
+              </template>
+              <template x-if="hasCat('iac')">
+                <div class="progress-step pending"><span class="cat-chip cat-iac">IaC</span> Analysis — <span x-text="form.scanners.filter(s=>catOf(s)==='iac').join(', ')"></span></div>
+              </template>
+              <template x-if="form.include_dast">
+                <div>
+                  <div class="progress-step pending"><span class="cat-chip cat-dast">DAST</span> Playwright Auth</div>
+                  <div class="progress-step pending"><span class="cat-chip cat-dast">DAST</span> Playwright Crawl</div>
+                  <div class="progress-step pending"><span class="cat-chip cat-dast">DAST</span> <span x-text="form.scanner_tool==='both'?'Burp + ZAP':form.scanner_tool==='burp'?'Burp Pro':'ZAP'"></span> Active Scan</div>
+                </div>
+              </template>
+              <div class="progress-step pending">Findings Correlation + AI Enrichment</div>
+              <div class="progress-step pending">Report Generation</div>
+            </div>
+          </div>
+
+          <!-- Scanners -->
+          <div class="section-card">
+            <div class="section-title mb-3">DevSecOps Scanners (<span x-text="form.scanners.length"></span>)</div>
+            <div class="flex flex-wrap gap-2">
+              <template x-for="s in form.scanners" :key="s">
+                <span class="text-xs px-3 py-1 rounded-full font-semibold border"
+                      :class="catOf(s)==='sast'?'cat-chip cat-sast border-blue-500/30':catOf(s)==='sca'?'cat-chip cat-sca border-yellow-500/30':catOf(s)==='secrets'?'cat-chip cat-secrets border-red-500/30':'cat-chip cat-iac border-purple-500/30'"
+                      x-text="s"></span>
+              </template>
+              <span x-show="form.scanners.length===0" class="text-xs text-red-400">No scanners selected — go back to Step 2</span>
+            </div>
+          </div>
+
+          <div x-show="launchError" class="callout mt-3" style="border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.08);color:#fca5a5" x-text="launchError"></div>
+
+          <template x-if="!form.git_url">
+            <div class="callout callout-warn mb-3">⚠ No repository URL set — go back to Step 1.</div>
+          </template>
+          <template x-if="form.scanners.length === 0">
+            <div class="callout callout-warn mb-3">⚠ No scanners selected — go back to Step 2.</div>
+          </template>
+        </div><!-- /step 3 -->
+
+        <!-- DevSecOps navigation buttons -->
+        <div class="flex justify-between items-center mt-6">
+          <button class="btn btn-secondary" x-show="step > 1" @click="step--">← Back</button>
+          <div x-show="step === 1"></div>
+          <div class="flex gap-3">
+            <button class="btn btn-secondary" @click="window.location.href='/devsecops'">Cancel</button>
+            <button class="btn btn-primary" x-show="step < 3" @click="nextStep()"
+                    :disabled="step===1 && !form.git_url">
+              Next →
+            </button>
+            <button class="btn btn-primary" x-show="step === 3"
+                    @click="launch()"
+                    :disabled="!form.git_url || form.scanners.length===0 || launching"
+                    x-text="launching ? 'Launching…' : 'Launch Scan'">
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════ SCHEDULE PANEL ══════════════════════════ -->
+      <div x-show="kind==='schedule'" x-data="scheduleForm()" x-init="init()">
+        <div class="wizard-steps mb-6">
+          <template x-for="(s,i) in wizardSteps" :key="i">
+            <div class="wizard-step" :class="{'active':step===i+1,'done':step>i+1}">
+              <div class="step-num" x-text="i+1"></div>
+              <div class="step-label" x-text="s"></div>
+            </div>
+          </template>
+        </div>
+
+        <!-- Step 1: Basic -->
+        <div x-show="step===1" class="section-card">
+          <div class="form-row">
+            <label class="form-label">Schedule Name <span class="text-red-400">*</span></label>
+            <input class="form-control" placeholder="e.g. Weekly Production Scan" x-model="form.name"/>
+          </div>
+          <div class="form-row">
+            <label class="form-label">Scan Type</label>
+            <select class="form-select" x-model="form.scan_type">
+              <option value="vulnerability">Vulnerability Scan</option>
+              <option value="discovery">Discovery Scan</option>
+            </select>
+          </div>
+          <div class="form-row mb-0">
+            <label class="form-label">Option Profile</label>
+            <select class="form-select" x-model="form.profile">
+              <option value="">— Default —</option>
+              <template x-for="p in profiles" :key="p.name">
+                <option :value="p.name" x-text="p.name"></option>
+              </template>
+            </select>
+          </div>
+        </div>
+
+        <!-- Step 2: Target Web Apps -->
+        <div x-show="step===2" class="section-card">
+          <div class="form-row mb-0">
+            <label class="form-label">Select Web Applications <span class="text-red-400">*</span></label>
+            <div class="space-y-2 mt-2">
+              <template x-if="webapps.length === 0">
+                <p class="text-sm text-gray-400">No web applications found. <a href="/webapps" class="text-teal-400">Add one first.</a></p>
+              </template>
+              <template x-for="app in webapps" :key="app.id">
+                <label class="flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-gray-700/30" :class="(form.web_app_ids||[]).includes(app.id) ? 'bg-teal-900/20 border border-teal-700' : 'border border-transparent'">
+                  <input type="checkbox" :value="app.id" @change="toggleApp(app.id)" :checked="(form.web_app_ids||[]).includes(app.id)" class="w-4 h-4"/>
+                  <div>
+                    <div class="font-medium text-sm" x-text="app.name"></div>
+                    <div class="text-xs text-gray-400" x-text="app.url"></div>
+                  </div>
+                </label>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: Timing -->
+        <div x-show="step===3" class="section-card">
+          <div class="form-row">
+            <label class="form-label">Frequency <span class="text-red-400">*</span></label>
+            <select class="form-select" x-model="form.schedule_type">
+              <option value="once">Once</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="cron">Custom Cron</option>
+            </select>
+          </div>
+
+          <template x-if="form.schedule_type === 'weekly'">
+            <div class="form-row">
+              <label class="form-label">Day of Week</label>
+              <select class="form-select" x-model.number="form.day_of_week">
+                <option value="0">Monday</option>
+                <option value="1">Tuesday</option>
+                <option value="2">Wednesday</option>
+                <option value="3">Thursday</option>
+                <option value="4">Friday</option>
+                <option value="5">Saturday</option>
+                <option value="6">Sunday</option>
+              </select>
+            </div>
+          </template>
+
+          <template x-if="form.schedule_type === 'monthly'">
+            <div class="form-row">
+              <label class="form-label">Day of Month (1–28)</label>
+              <input type="number" class="form-control" x-model.number="form.day_of_month" min="1" max="28"/>
+            </div>
+          </template>
+
+          <template x-if="form.schedule_type === 'cron'">
+            <div class="form-row">
+              <label class="form-label">Cron Expression</label>
+              <input class="form-control font-mono" placeholder="0 2 * * 1" x-model="form.cron_expr"/>
+              <p class="text-xs text-gray-500 mt-1">Format: minute hour day-of-month month day-of-week</p>
+            </div>
+          </template>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="form-row">
+              <label class="form-label">Hour (0–23)</label>
+              <input type="number" class="form-control" x-model.number="form.hour" min="0" max="23"/>
+            </div>
+            <div class="form-row">
+              <label class="form-label">Minute (0–59)</label>
+              <input type="number" class="form-control" x-model.number="form.minute" min="0" max="59"/>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-3 mt-3">
+            <label class="toggle-switch"><input type="checkbox" x-model="form.enabled"/><span class="toggle-slider"></span></label>
+            <span class="text-sm">Enable schedule immediately</span>
+          </div>
+        </div>
+
+        <!-- Step 4: Review -->
+        <div x-show="step===4" class="section-card">
+          <h4 class="text-sm font-semibold text-gray-300 mb-3">Review Schedule</h4>
+          <div class="terminal" style="font-size:12px;max-height:240px;overflow:auto" x-text="reviewJson()"></div>
+        </div>
+
+        <!-- Schedule navigation buttons -->
+        <div class="flex justify-between items-center mt-6">
+          <button class="btn btn-secondary" @click="step > 1 ? step-- : window.location='/schedules'" x-text="step > 1 ? '← Back' : 'Cancel'"></button>
+          <button class="btn btn-primary" @click="wizardNext()" :disabled="saving">
+            <span x-text="step < wizardSteps.length ? 'Next →' : (saving ? 'Saving…' : 'Create')"></span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<div id="toast-container"></div>
+
+<script>
+function launcher() {
+  return {
+    kind: 'dast',
+    init() {
+      const k = new URLSearchParams(location.search).get('kind');
+      if (['dast','devsecops','schedule'].includes(k)) this.kind = k;
+      window.addEventListener('set-launch-kind', e => this.kind = e.detail);
+    },
+  };
+}
+
+/* ── DevSecOps panel component (copied from devsecops/new-scan.html, minus
+ *    the "What do you want to launch?" selector — the parent picker replaces it). */
+function dsNewScan() {
+  const TOOL_CAT = {
+    semgrep:'sast', sonarqube:'sast', 'snyk-code':'sast',
+    snyk:'sca', trivy:'sca',
+    trufflehog:'secrets', gitguardian:'secrets',
+    'snyk-iac':'iac',
+  };
+
+  return {
+    step: 1,
+    steps: ['Source & Phase', 'Scanner Selection', 'Review & Launch'],
+    repos: [],
+    webapps: [],
+    authRecords: [],
+    toolStatus: [],
+    gatePolicies: [],
+    agents: [],
+    selectedRepoId: '',
+    aiLoading: false,
+    aiRationale: '',
+    launching: false,
+    launchError: '',
+
+    form: {
+      name: '',
+      git_url: '',
+      branch: 'main',
+      commit: '',
+      scan_phase: 'pr',
+      web_app_id: '',
+      scanners: ['semgrep', 'snyk', 'trufflehog', 'trivy'],
+      include_dast: false,
+      ...window.DastOptions.defaults(),
+      auth_record_id: '',
+      run_nmap: false, run_ai: true, run_fp: true, run_policy: true, run_trend: true, run_docs: true,
+      scan_mode_override: '',
+      gate_policy_id: '',
+      gate_fail_on: 'high',
+      gate_max_critical: 0,
+      gate_max_high: 0,
+      scanner_appliance: { type:'external', appliance_id:'', tags:[] },
+    },
+
+    poolLabels() {
+      const out = new Set();
+      for (const a of (this.agents || [])) {
+        for (const v of Object.values(a.labels || {})) if (v) out.add(String(v));
+      }
+      return [...out];
+    },
+    // Capabilities this scan needs = the selected scanners, with snyk-code/snyk-iac
+    // mapped to the `snyk` binary capability (they're modes of the same tool).
+    requiredCaps() {
+      const ALIAS = { 'snyk-code': 'snyk', 'snyk-iac': 'snyk' };
+      const out = new Set();
+      for (const t of (this.form.scanners || [])) out.add(ALIAS[t] || t);
+      return [...out];
+    },
+    // Only agents that advertise ALL required tool capabilities can run this scan —
+    // pinning to one that can't leaves the job queued forever. Filter them out.
+    capableAgents() {
+      const need = this.requiredCaps();
+      return (this.agents || []).filter(a => need.every(c => (a.capabilities || []).includes(c)));
+    },
+    applianceSummary() {
+      const sa = this.form.scanner_appliance || {};
+      if (sa.type === 'individual') return `Individual: ${sa.appliance_id || '(unset)'}`;
+      if (sa.type === 'tags') return `Tags: ${(sa.tags||[]).join(', ') || '(unset)'}`;
+      return 'External (local)';
+    },
+
+    get allTools() {
+      const statusMap = {};
+      for (const t of this.toolStatus) statusMap[t.name] = t;
+      return [
+        { name:'semgrep',     label:'Semgrep',       cat:'sast',    available: !!(statusMap['semgrep']?.installed),     needs_key:false,  key_ok:true },
+        { name:'sonarqube',   label:'SonarQube',     cat:'sast',    available: !!(statusMap['sonarqube']?.installed),   needs_key:true,   key_ok:!!(statusMap['sonarqube']?.key_configured) },
+        { name:'snyk-code',   label:'Snyk Code',     cat:'sast',    available: !!(statusMap['snyk']?.installed),        needs_key:true,   key_ok:!!(statusMap['snyk']?.key_configured) },
+        { name:'snyk',        label:'Snyk',          cat:'sca',     available: !!(statusMap['snyk']?.installed),        needs_key:true,   key_ok:!!(statusMap['snyk']?.key_configured) },
+        { name:'trivy',       label:'Trivy',         cat:'sca',     available: !!(statusMap['trivy']?.installed),       needs_key:false,  key_ok:true },
+        { name:'trufflehog',  label:'TruffleHog',    cat:'secrets', available: !!(statusMap['trufflehog']?.installed),  needs_key:false,  key_ok:true },
+        { name:'gitguardian', label:'GitGuardian',   cat:'secrets', available: !!(statusMap['gitguardian']?.installed), needs_key:true,   key_ok:!!(statusMap['gitguardian']?.key_configured) },
+        { name:'snyk-iac',    label:'Snyk IaC',      cat:'iac',     available: !!(statusMap['snyk']?.installed),        needs_key:true,   key_ok:!!(statusMap['snyk']?.key_configured) },
+      ];
+    },
+
+    async init() {
+      try {
+        const [repos, webapps, ts, policies, authrecs, agentsResp] = await Promise.all([
+          api.get('/api/devsecops/repos'),
+          api.get('/api/webapps'),
+          api.get('/api/devsecops/tool-status').catch(() => []),
+          api.get('/api/devsecops/policies').catch(() => []),
+          api.get('/api/auth-records').catch(() => []),
+          api.get('/api/agents').catch(() => ({ agents: [] })),
+        ]);
+        this.repos       = Array.isArray(repos)     ? repos     : (repos.data     || []);
+        this.webapps     = Array.isArray(webapps)   ? webapps   : (webapps.data   || []);
+        this.toolStatus  = Array.isArray(ts)        ? ts        : (ts.data        || []);
+        this.gatePolicies= Array.isArray(policies)  ? policies  : (policies.data  || []);
+        this.authRecords = Array.isArray(authrecs)  ? authrecs  : (authrecs.data  || []);
+        this.agents      = ((agentsResp && agentsResp.agents) || []).filter(a => a.status !== 'revoked' && a.status !== 'offline');
+
+        const p = new URLSearchParams(window.location.search);
+        const rid = p.get('repo_id');
+        if (rid) { this.selectedRepoId = rid; this.applyRepo(); }
+      } catch(e) { console.error(e); }
+    },
+
+    applyRepo() {
+      if (!this.selectedRepoId || this.selectedRepoId === '__manual__') return;
+      const r = this.repos.find(x => x.id === this.selectedRepoId);
+      if (!r) return;
+      this.form.git_url = r.url;
+      this.form.branch  = r.default_branch || 'main';
+      this.form.scanners = (r.default_scanners || []).filter(s => TOOL_CAT[s]);
+      if (!this.form.name) this.form.name = r.name + ' DevSecOps ' + new Date().toISOString().slice(0,10);
+    },
+
+    updateNameFromUrl() {
+      if (this.form.name) return;
+      const parts = (this.form.git_url || '').replace(/\.git$/, '').split('/');
+      const repoName = parts[parts.length - 1] || '';
+      if (repoName) this.form.name = repoName + ' DevSecOps ' + new Date().toISOString().slice(0,10);
+    },
+
+    catOf(tool) { return TOOL_CAT[tool] || 'sast'; },
+
+    hasCat(cat) { return this.form.scanners.some(s => this.catOf(s) === cat); },
+
+    webappName(id) {
+      if (!id) return '—';
+      const a = this.webapps.find(a => a.id === id);
+      return a ? a.name : id.slice(0,8);
+    },
+
+    selectAll() {
+      this.form.scanners = this.allTools.filter(t => t.available).map(t => t.name);
+    },
+
+    nextStep() {
+      if (this.step === 1 && !this.form.git_url) return;
+      if (this.step < this.steps.length) this.step++;
+    },
+
+    async aiSuggest() {
+      this.aiLoading = true; this.aiRationale = '';
+      try {
+        const r = await api.post('/api/ai/suggest-scanners', {
+          description: this.form.name + ' — ' + this.form.git_url,
+        });
+        const d = r.data || r;
+        if (Array.isArray(d.selected)) {
+          this.form.scanners = d.selected.filter(s => TOOL_CAT[s]);
+        }
+        this.aiRationale = d.rationale || '';
+      } catch(e) { this.aiRationale = 'AI could not be reached — defaults kept.'; }
+      finally { this.aiLoading = false; }
+    },
+
+    async launch() {
+      this.launching = true; this.launchError = '';
+      try {
+        if (!this.form.name) {
+          this.form.name = (this.form.git_url.split('/').pop() || 'ds-scan').replace(/\.git$/, '')
+            + '_' + new Date().toISOString().slice(0,19).replace('T','_').replace(/:/g,'-');
+        }
+
+        let scanId;
+
+        if (this.form.include_dast && this.form.web_app_id) {
+          const webApp = this.webapps.find(a => a.id === this.form.web_app_id);
+          const body = {
+            name:                this.form.name,
+            target:              webApp ? webApp.url : '',
+            mode:                'full',
+            web_app_id:          this.form.web_app_id,
+            scan_phase:          this.form.scan_phase,
+            devsecops_scanners:  this.form.scanners,
+            devsecops_repo:      this.form.git_url,
+            devsecops_branch:    this.form.branch || 'main',
+            skip_nmap:           !this.form.run_nmap,
+            skip_ai:             !this.form.run_ai,
+            skip_fp:             !this.form.run_fp,
+            skip_policy:         !this.form.run_policy,
+            skip_trend:          !this.form.run_trend,
+            skip_docs:           !this.form.run_docs,
+            ...(this.form.auth_record_id ? { auth_record_id: this.form.auth_record_id,
+                                             auth_record_ids: [this.form.auth_record_id] } : {}),
+            ...window.DastOptions.buildPayload(this.form),
+            scanner_appliance:   this.form.scanner_appliance,
+          };
+          const r = await API.scans.create(body);
+          scanId = r.id || r.scan_id;
+        } else {
+          const r = await api.post('/api/devsecops/internal-run', {
+            scanners:           this.form.scanners,
+            git_url:            this.form.git_url,
+            branch:             this.form.branch || 'main',
+            commit:             this.form.commit || null,
+            web_app_id:         this.form.web_app_id || null,
+            repo_id:            this.selectedRepoId && this.selectedRepoId !== '__manual__' ? this.selectedRepoId : null,
+            name:               this.form.name,
+            scan_phase:         this.form.scan_phase,
+            diff_aware:         this.form.scan_phase === 'pr',
+            scan_mode:          this.form.scan_mode_override || null,
+            gate_policy_id:     (this.form.gate_policy_id && this.form.gate_policy_id !== '__custom__') ? this.form.gate_policy_id : null,
+            gate_fail_on:       this.form.gate_policy_id === '__custom__' ? this.form.gate_fail_on : null,
+            gate_max_critical:  this.form.gate_policy_id === '__custom__' ? this.form.gate_max_critical : 0,
+            gate_max_high:      this.form.gate_policy_id === '__custom__' ? this.form.gate_max_high : 0,
+            scanner_appliance:  this.form.scanner_appliance,
+          });
+          const d = r.data || r;
+          scanId = d.scan_id;
+        }
+
+        toast('Scan launched — ' + this.form.name, 'success');
+        if (scanId) {
+          window.location.href = '/devsecops/scan-detail?id=' + scanId;
+        } else {
+          window.location.href = '/devsecops/pipelines';
+        }
+      } catch(e) {
+        this.launchError = e.message || String(e);
+      } finally { this.launching = false; }
+    },
+  };
+}
+
+/* ── Schedule panel component — CREATE-only wizard reusing schedulesPage()
+ *    logic (no list/table). On success: toast then redirect to /schedules. */
+function scheduleForm() {
+  return {
+    webapps: [], profiles: [],
+    saving: false, step: 1,
+    wizardSteps: ['Basic', 'Target Apps', 'Timing', 'Review'],
+    form: {},
+
+    async init() {
+      this.resetForm();
+      try {
+        const [apps, profiles] = await Promise.all([
+          API.webapps.list(), API.profiles.list()
+        ]);
+        this.webapps = apps || [];
+        this.profiles = profiles || [];
+      } catch(e) { toast(e.message, 'error'); }
+
+      // Deep-link pre-fill: ?webapp=<id>&type=<scan_type>
+      const p = new URLSearchParams(location.search);
+      const wid = p.get('webapp'), wtype = p.get('type');
+      if (wtype === 'discovery' || wtype === 'vulnerability') this.form.scan_type = wtype;
+      if (wid) {
+        this.form.web_app_ids = [wid];
+        const app = (this.webapps || []).find(a => a.id === wid);
+        if (app) this.form.name = `${app.name} — ${this.form.scan_type} schedule`;
+      }
+    },
+
+    resetForm() {
+      this.form = {
+        name:'', scan_type:'vulnerability', profile:'',
+        web_app_ids:[], schedule_type:'weekly',
+        day_of_week:0, day_of_month:1, hour:2, minute:0,
+        cron_expr:'', enabled:true
+      };
+    },
+
+    toggleApp(id) {
+      const i = this.form.web_app_ids.indexOf(id);
+      if (i === -1) this.form.web_app_ids.push(id);
+      else this.form.web_app_ids.splice(i, 1);
+    },
+
+    reviewJson() {
+      return JSON.stringify({
+        name: this.form.name, scan_type: this.form.scan_type,
+        profile: this.form.profile||'default',
+        web_app_ids: this.form.web_app_ids,
+        schedule_type: this.form.schedule_type,
+        day_of_week: this.form.schedule_type === 'weekly' ? this.form.day_of_week : undefined,
+        day_of_month: this.form.schedule_type === 'monthly' ? this.form.day_of_month : undefined,
+        hour: this.form.hour, minute: this.form.minute,
+        cron_expr: this.form.schedule_type === 'cron' ? this.form.cron_expr : undefined,
+        enabled: this.form.enabled,
+      }, null, 2);
+    },
+
+    async wizardNext() {
+      if (this.step === 1 && !this.form.name) { toast('Name required', 'error'); return; }
+      if (this.step === 2 && this.form.web_app_ids.length === 0) { toast('Select at least one web app', 'error'); return; }
+      if (this.step < this.wizardSteps.length) { this.step++; return; }
+      this.saving = true;
+      try {
+        const body = {
+          name: this.form.name, scan_type: this.form.scan_type,
+          profile: this.form.profile || null,
+          web_app_ids: this.form.web_app_ids,
+          schedule_type: this.form.schedule_type,
+          hour: this.form.hour, minute: this.form.minute,
+          enabled: this.form.enabled,
+        };
+        if (this.form.schedule_type === 'weekly') body.day_of_week = this.form.day_of_week;
+        if (this.form.schedule_type === 'monthly') body.day_of_month = this.form.day_of_month;
+        if (this.form.schedule_type === 'cron') body.cron_expr = this.form.cron_expr;
+
+        await API.schedules.create(body);
+        toast('Schedule created');
+        window.location = '/schedules';
+      } catch(e) { toast(e.message, 'error'); }
+      finally { this.saving = false; }
+    },
+  };
+}
+</script>
+</body>
+</html>
