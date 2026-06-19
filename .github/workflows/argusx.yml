@@ -1,0 +1,66 @@
+# .github/workflows/argusx.yml — Argus X DevSecOps Gate
+# Add a repo secret ARGUSX_TOKEN (DevSecOps → Integrations → New CI Token).
+# Set repo variable ARGUSX_URL to your Argus X platform URL.
+# Scans run on Argus X (NOT in this runner); the build fails on a 'block' verdict.
+
+name: Argus X — DevSecOps Gate
+
+on:
+  pull_request:
+    branches: [main, master, release/**]
+  push:
+    branches: [main, master]
+
+jobs:
+  security-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trigger Argus X scan
+        id: trigger
+        env:
+          ARGUSX_URL:   ${{ vars.ARGUSX_URL || 'https://argusx.internal' }}
+          ARGUSX_TOKEN: ${{ secrets.ARGUSX_TOKEN }}
+        run: |
+          set -e
+          PAYLOAD=$(jq -n \
+            --arg url  "https://github.com/${{ github.repository }}" \
+            --arg sha  "${{ github.sha }}" \
+            --arg br   "${{ github.head_ref || github.ref_name }}" \
+            --argjson pr "${{ github.event.pull_request.number || 0 }}" \
+            --argjson da true \
+            '{repo:$url, commit:$sha, branch:$br, pr_number:(if $pr==0 then null else $pr end),
+              ci_system:"github", scanners:["snyk-code","semgrep","snyk","trivy","trufflehog","snyk-iac"], diff_aware:$da,
+              gate:{fail_on:"medium", sla_seconds:600}}')
+          RESP=$(curl -s -w "\n%{http_code}" -X POST "$ARGUSX_URL/api/ci/scan" \
+            -H "Authorization: Bearer $ARGUSX_TOKEN" -H "Content-Type: application/json" -d "$PAYLOAD")
+          HTTP_CODE=$(echo "$RESP" | tail -1); BODY=$(echo "$RESP" | head -n -1)
+          echo "HTTP $HTTP_CODE — $BODY"
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "::error::Argus X /api/ci/scan returned HTTP $HTTP_CODE: $BODY"; exit 1; fi
+          echo "job_id=$(echo "$BODY" | jq -r .job_id)" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for gate verdict
+        env:
+          ARGUSX_URL:   ${{ vars.ARGUSX_URL || 'https://argusx.internal' }}
+          ARGUSX_TOKEN: ${{ secrets.ARGUSX_TOKEN }}
+        run: |
+          set -e
+          JOB="${{ steps.trigger.outputs.job_id }}"
+          DEADLINE=$(( $(date +%s) + 600 ))
+          while true; do
+            RESP=$(curl -s -w "\n%{http_code}" \
+              "$ARGUSX_URL/api/ci/scan/$JOB/gate-result?timeout_seconds=60" \
+              -H "Authorization: Bearer $ARGUSX_TOKEN") || true
+            HTTP_CODE=$(echo "$RESP" | tail -1); BODY=$(echo "$RESP" | head -n -1)
+            if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+              echo "::warning::gate-result HTTP $HTTP_CODE — retrying. $BODY"; sleep 5
+            else
+              DECISION=$(echo "$BODY" | jq -r .decision); echo "Gate decision: $DECISION"
+              if [ "$DECISION" = "block" ]; then echo "$BODY" | jq .; echo "::error::Argus X gate BLOCKED this build."; exit 1; fi
+              if [ "$DECISION" = "pass" ];  then echo "$BODY" | jq .; echo "✓ Argus X gate PASSED."; exit 0; fi
+            fi
+            if [ "$(date +%s)" -ge "$DEADLINE" ]; then echo "::warning::Gate timeout — failing safe."; exit 1; fi
+          done
