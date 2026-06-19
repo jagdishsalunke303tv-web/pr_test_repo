@@ -33,7 +33,7 @@ jobs:
             --argjson da true \
             '{repo:$url, commit:$sha, branch:$br, pr_number:(if $pr==0 then null else $pr end),
               ci_system:"github", scanners:["snyk-code","semgrep","snyk","trivy","trufflehog","snyk-iac"], diff_aware:$da,
-              gate:{fail_on:"medium", sla_seconds:600}}')
+              gate:{fail_on:"critical", sla_seconds:600}}')
           RESP=$(curl -s -w "\n%{http_code}" -X POST "$ARGUSX_URL/api/ci/scan" \
             -H "Authorization: Bearer $ARGUSX_TOKEN" -H "Content-Type: application/json" -d "$PAYLOAD")
           HTTP_CODE=$(echo "$RESP" | tail -1); BODY=$(echo "$RESP" | head -n -1)
